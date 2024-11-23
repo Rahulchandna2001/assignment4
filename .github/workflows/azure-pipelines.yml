@@ -1,4 +1,4 @@
-# Azure DevOps pipeline configuration for database deployment and schema updates
+# Azure DevOps pipeline configuration for MySQL database deployment and schema updates
 trigger:
   - main
 
@@ -6,33 +6,34 @@ pool:
   vmImage: "ubuntu-latest"
 
 variables:
-  AZURE_SQL_SERVER: "db-rcha5267.mysql.database.azure.com"
-  AZURE_SQL_DATABASE: "studentdb1"
-  AZURE_SQL_USERNAME: "rootdb"
-  AZURE_SQL_PASSWORD: "Secret55"
+  MYSQL_SERVER: "db-rcha5267.mysql.database.azure.com"
+  MYSQL_DATABASE: "studentdb1"
+  MYSQL_USERNAME: "rootdb@db-rcha5267"  # Include the server in the username
+  MYSQL_PASSWORD: $(MYSQL_PASSWORD)  # Secure password stored in pipeline variables
 
 steps:
-  # Step 1: Install Azure SQL CLI tools
-  - task: UsePythonVersion@1
-    inputs:
-      versionSpec: "3.x"
-      addToPath: true
-
+  # Step 1: Install MySQL client tools
   - script: |
-      pip install sqlcmd
-    displayName: "Install sqlcmd tool"
+      apt-get update
+      apt-get install -y mysql-client
+    displayName: "Install MySQL client tools"
 
-  # Step 2: Deploy `create_table.sql`
+  # Step 2: Validate database connection
   - script: |
-      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -i create_table.sql
+      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) -e "SELECT 1;"
+    displayName: "Validate MySQL database connection"
+
+  # Step 3: Deploy `create_table.sql`
+  - script: |
+      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) < create_table.sql
     displayName: "Deploy create_table.sql"
 
-  # Step 3: Run `update_table.sql`
+  # Step 4: Run `update_table.sql`
   - script: |
-      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -i update_table.sql
+      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) < update_table.sql
     displayName: "Run update_table.sql"
 
-  # Step 4: Validate schema update
+  # Step 5: Validate schema update
   - script: |
-      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -Q "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Students' AND COLUMN_NAME = 'Email';"
+      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -e "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Students' AND COLUMN_NAME = 'Email';"
     displayName: "Validate schema update"
