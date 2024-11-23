@@ -1,0 +1,38 @@
+# Azure DevOps pipeline configuration for database deployment and schema updates
+trigger:
+  - main
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  AZURE_SQL_SERVER: "db-rcha5267.mysql.database.azure.com"
+  AZURE_SQL_DATABASE: "studentdb1"
+  AZURE_SQL_USERNAME: "rootdb"
+  AZURE_SQL_PASSWORD: "Secret55"
+
+steps:
+  # Step 1: Install Azure SQL CLI tools
+  - task: UsePythonVersion@1
+    inputs:
+      versionSpec: "3.x"
+      addToPath: true
+
+  - script: |
+      pip install sqlcmd
+    displayName: "Install sqlcmd tool"
+
+  # Step 2: Deploy `create_table.sql`
+  - script: |
+      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -i create_table.sql
+    displayName: "Deploy create_table.sql"
+
+  # Step 3: Run `update_table.sql`
+  - script: |
+      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -i update_table.sql
+    displayName: "Run update_table.sql"
+
+  # Step 4: Validate schema update
+  - script: |
+      sqlcmd -S $(AZURE_SQL_SERVER) -d $(AZURE_SQL_DATABASE) -U $(AZURE_SQL_USERNAME) -P $(AZURE_SQL_PASSWORD) -Q "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Students' AND COLUMN_NAME = 'Email';"
+    displayName: "Validate schema update"
