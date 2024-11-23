@@ -1,39 +1,99 @@
-# Azure DevOps pipeline configuration for MySQL database deployment and schema updates
 trigger:
-  - main
+  branches:
+    include:
+      - main
 
 pool:
-  vmImage: "ubuntu-latest"
+  vmImage: 'ubuntu-latest'
 
 variables:
-  MYSQL_SERVER: "db-rcha5267.mysql.database.azure.com"
-  MYSQL_DATABASE: "studentdb1"
-  MYSQL_USERNAME: "rootdb@db-rcha5267"  # Include the server in the username
-  MYSQL_PASSWORD: $(MYSQL_PASSWORD)  # Secure password stored in pipeline variables
+  DB_HOST: 'db-rcha5267.mysql.database.azure.com'
+  DB_USER: 'rootdb'
+  DB_NAME: 'studentdb1'
 
 steps:
-  # Step 1: Install MySQL client tools
-  - script: |
-      apt-get update
-      apt-get install -y mysql-client
-    displayName: "Install MySQL client tools"
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
 
-  # Step 2: Validate database connection
-  - script: |
-      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) -e "SELECT 1;"
-    displayName: "Validate MySQL database connection"
+- script: |
+    pip install mysql-connector-python
+  displayName: 'Install MySQL Connector'
 
-  # Step 3: Deploy `create_table.sql`
-  - script: |
-      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) < create_table.sql
-    displayName: "Deploy create_table.sql"
+- script: |
+    python -c "
+    import mysql.connector
+    import sys
+    try:
+        conn = mysql.connector.connect(
+            host='${{ variables.DB_HOST }}',
+            user='${{ variables.DB_USER }}',
+            password='$(DB_PASSWORD)',  # Secret variable
+            database='${{ variables.DB_NAME }}'
+        )
+        cursor = conn.cursor()
+        with open('create_table.sql', 'r') as file:
+            cursor.execute(file.read())
+        conn.commit()
+        print('Successfully executed create_table.sql.')
+    except Exception as e:
+        print(f'Error running create_table.sql: {e}')
+        sys.exit(1)
+    finally:
+        if conn:
+            conn.close()
+    "
+  displayName: 'Run create_table.sql'
 
-  # Step 4: Run `update_table.sql`
-  - script: |
-      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) < update_table.sql
-    displayName: "Run update_table.sql"
+- script: |
+    python -c "
+    import mysql.connector
+    import sys
+    try:
+        conn = mysql.connector.connect(
+            host='${{ variables.DB_HOST }}',
+            user='${{ variables.DB_USER }}',
+            password='$(DB_PASSWORD)',  # Secret variable
+            database='${{ variables.DB_NAME }}'
+        )
+        cursor = conn.cursor()
+        with open('update_table.sql', 'r') as file:
+            cursor.execute(file.read())
+        conn.commit()
+        print('Successfully executed update_table.sql.')
+    except Exception as e:
+        print(f'Error running update_table.sql: {e}')
+        sys.exit(1)
+    finally:
+        if conn:
+            conn.close()
+    "
+  displayName: 'Run update_table.sql'
 
-  # Step 5: Validate schema update
-  - script: |
-      mysql -h $(MYSQL_SERVER) -u $(MYSQL_USERNAME) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -e "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Students' AND COLUMN_NAME = 'Email';"
-    displayName: "Validate schema update"
+- script: |
+    python -c "
+    import mysql.connector
+    import sys
+    try:
+        conn = mysql.connector.connect(
+            host='${{ variables.DB_HOST }}',
+            user='${{ variables.DB_USER }}',
+            password='$(DB_PASSWORD)',  # Secret variable
+            database='${{ variables.DB_NAME }}'
+        )
+        cursor = conn.cursor()
+        cursor.execute(\"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Students' AND COLUMN_NAME = 'Email';\")
+        result = cursor.fetchone()
+        if result:
+            print('Column exists: Validation successful.')
+        else:
+            print('Validation failed: Column does not exist.')
+            sys.exit(1)
+    except Exception as e:
+        print(f'Error during validation: {e}')
+        sys.exit(1)
+    finally:
+        if conn:
+            conn.close()
+    "
+  displayName: 'Validate schema update'
